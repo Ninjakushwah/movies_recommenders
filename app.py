@@ -1,27 +1,30 @@
 import streamlit as st
-import pickle
 import pandas as pd
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Load saved files
-@st.cache_resource
-def load_data():
-    cv = pickle.load(open('vectorizer.pkl', 'rb'))
-    similarity = pickle.load(open('similarity.pkl', 'rb'))
-    df = pickle.load(open('movies.pkl', 'rb'))
-    return cv, similarity, df
-
-cv, similarity, df = load_data()
-
-# App title
 st.set_page_config(page_title="Movie Recommender", layout="wide")
 st.title(" Movie Recommendation Engine")
 st.write("Enter a movie name to get similar recommendations")
 
-# Input
+@st.cache_resource
+def load_and_process():
+    df = pd.read_csv("imdb_top_1000.csv")
+    df["Cast"] = df["Star1"] + " " + df["Star2"] + " " + df["Star3"] + " " + df["Star4"]
+    df["tags"] = df["Genre"] + " " + df["Overview"] + " " + df["Cast"]
+    df["tags"] = df["tags"].str.replace(",", "").str.lower()
+    
+    cv = CountVectorizer(max_features=5000, stop_words="english")
+    vector = cv.fit_transform(df["tags"])
+    similarity = cosine_similarity(vector)
+    
+    return df, similarity
+
+df, similarity = load_and_process()
+
 movie_name = st.text_input("Enter movie name:", placeholder="e.g., The Dark Knight")
 
 if movie_name:
-    # Search
     movie_list = df[df['Series_Title'].str.contains(movie_name.lower(), case=False)].index
     
     if len(movie_list) == 0:
@@ -31,7 +34,6 @@ if movie_name:
         selected_movie = df.iloc[index]['Series_Title']
         st.success(f" Found: {selected_movie}")
         
-        # Get recommendations
         distances = sorted(list(enumerate(similarity[index])), reverse=True, key=lambda x: x[1])
         
         st.subheader("Similar Movies:")
@@ -42,8 +44,8 @@ if movie_name:
                 movie_data = df.iloc[movie_idx[0]]
                 score = movie_idx[1]
                 
-                st.write(f"**{i+1}. {movie_data['Series_Title']}**")
-                st.write(f"Rating: ⭐ {movie_data['IMDB_Rating']}")
+                st.write(f"{i+1}. {movie_data['Series_Title']}")
+                st.write(f"Rating:  {movie_data['IMDB_Rating']}")
                 st.write(f"Similarity Score: {score:.2%}")
                 st.write(f"Genre: {movie_data['Genre']}")
                 st.write("---")
